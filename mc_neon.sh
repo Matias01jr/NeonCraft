@@ -20,7 +20,7 @@ WALLPAPER_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/r
 mkdir -p "$CONFIG_DIR"
 
 check_dependencies() {
-    # Desactivar repositorios CD-ROM en entornos Live
+    # Desactivar repositorios CD-ROM en entornos Live para evitar errores de apt
     sudo sed -i '/cdrom:/s/^/#/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
 
     local pkgs=()
@@ -94,7 +94,7 @@ apply_theme() {
         echo "[✔] Imagen descargada correctamente."
     else
         echo "[!] Error al descargar la imagen desde $WALLPAPER_URL"
-        read -p "Presiona Enter para continuar..."
+        read -p "Presiona Enter para continuar..." < /dev/tty
         return
     fi
 
@@ -117,7 +117,6 @@ apply_theme() {
             gsettings set org.mate.interface gtk-theme 'Yaru-dark'
             ;;
         xfce)
-            # Recorrer todos los monitores/pantallas en XFCE
             for prop in $(xfconf-query -c xfce4-desktop -l | grep -E 'last-image|image-path'); do
                 xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER_PATH" 2>/dev/null || true
             done
@@ -129,8 +128,8 @@ apply_theme() {
             ;;
     esac
 
-    # Recarga inmediata de la interfaz gráfica
-    echo "[+] Forzando recarga del escritorio..."
+    # Recarga inmediata de pantalla
+    echo "[+] Forzando recarga inmediata del escritorio..."
     case "$de" in
         xfce)
             xfdesktop --reload 2>/dev/null || xfdesktop -r 2>/dev/null || true
@@ -143,8 +142,9 @@ apply_theme() {
             ;;
     esac
 
+    # Pregunta interactiva redirigida a la terminal
     echo
-    read -p "¿Deseas reubicar la barra/menú al estilo moderno central/neón? (s/N): " resp
+    read -p "¿Deseas reubicar la barra/menú al estilo moderno central/neón? (s/N): " resp < /dev/tty
     if [[ "$resp" =~ ^[Ss]$ ]]; then
         case "$de" in
             gnome)
@@ -160,13 +160,13 @@ apply_theme() {
     fi
 
     echo -e "\n[✔] Tema Minecraft Neón aplicado con éxito."
-    read -p "Presiona Enter para continuar..."
+    read -p "Presiona Enter para continuar..." < /dev/tty
 }
 
 restore_theme() {
     if [ ! -f "$BACKUP_FILE" ]; then
         echo -e "\n[!] No se encontró ningún respaldo guardado en $BACKUP_FILE."
-        read -p "Presiona Enter para continuar..."
+        read -p "Presiona Enter para continuar..." < /dev/tty
         return
     fi
 
@@ -199,7 +199,7 @@ restore_theme() {
     esac
 
     echo -e "\n[✔] Configuración anterior restaurada."
-    read -p "Presiona Enter para continuar..."
+    read -p "Presiona Enter para continuar..." < /dev/tty
 }
 
 main_menu() {
@@ -209,8 +209,9 @@ main_menu() {
         clear
         local options="1) Aplicar Tema Minecraft Neón\n2) Restaurar Tema Anterior\n0) Salir"
         
+        # Redirección < /dev/tty para permitir entrada de teclado en fzf dentro de curl | bash
         local selection
-        selection=$(echo -e "$options" | fzf --height 40% --reverse --header="=== MINECRAFT NEON THEME MANAGER ===" --prompt="Selecciona una opción: ")
+        selection=$(echo -e "$options" | fzf --height 40% --reverse --header="=== MINECRAFT NEON THEME MANAGER ===" --prompt="Selecciona una opción: " < /dev/tty)
 
         case "$selection" in
             "1)"*|1)
