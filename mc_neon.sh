@@ -3,24 +3,22 @@
 set -e
 
 # ==============================================================================
-# CONFIGURACIÓN DE GITHUB (Modifica tus datos aquí)
+# CONFIGURACIÓN DE GITHUB
 # ==============================================================================
 GITHUB_USER="Matias01jr"
 GITHUB_REPO="NeonCraft"
 BRANCH="main"
-IMAGE_NAME="mc_neon.png" # Nombre de la imagen en tu repo de GitHub
+IMAGE_NAME="mc_neon.png"
 # ==============================================================================
 
 CONFIG_DIR="$HOME/.config/mc_neon_theme"
 BACKUP_FILE="$CONFIG_DIR/backup.cfg"
 WALLPAPER_PATH="$CONFIG_DIR/$IMAGE_NAME"
 
-# Construye la URL automáticamente desde tu repositorio de GitHub
-WALLPAPER_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${BRANCH}/${IMAGE_NAME}"
+WALLPAPER_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/refs/heads/${BRANCH}/${IMAGE_NAME}"
 
 mkdir -p "$CONFIG_DIR"
 
-# Instalar dependencias necesarias si faltan
 check_dependencies() {
     local pkgs=()
     command -v fzf >/dev/null 2>&1 || pkgs+=(fzf)
@@ -32,7 +30,6 @@ check_dependencies() {
     fi
 }
 
-# Detectar Entorno de Escritorio
 detect_de() {
     local de="${XDG_CURRENT_DESKTOP:-$DESKTOP_SESSION}"
     de="$(echo "$de" | tr '[:upper:]' '[:lower:]')"
@@ -47,7 +44,6 @@ detect_de() {
     esac
 }
 
-# Guardar configuración previa
 backup_current_theme() {
     local de
     de=$(detect_de)
@@ -80,7 +76,6 @@ backup_current_theme() {
     esac
 }
 
-# Aplicar fondo y tema
 apply_theme() {
     local de
     de=$(detect_de)
@@ -90,13 +85,12 @@ apply_theme() {
         backup_current_theme
     fi
 
-    echo "[+] Descargando fondo desde tu repositorio de GitHub..."
-    echo "    URL: $WALLPAPER_URL"
+    echo "[+] Descargando fondo desde GitHub..."
     
     if curl -fsSL -o "$WALLPAPER_PATH" "$WALLPAPER_URL"; then
         echo "[✔] Imagen descargada correctamente."
     else
-        echo "[!] Error al descargar la imagen. Verifica que '$IMAGE_NAME' exista en la raíz del repositorio."
+        echo "[!] Error al descargar la imagen desde $WALLPAPER_URL"
         read -p "Presiona Enter para continuar..."
         return
     fi
@@ -128,7 +122,6 @@ apply_theme() {
             ;;
     esac
 
-    # Preguntar sobre reubicación de menú/paneles
     echo
     read -p "¿Deseas reubicar la barra/menú al estilo moderno central/neón? (s/N): " resp
     if [[ "$resp" =~ ^[Ss]$ ]]; then
@@ -144,14 +137,13 @@ apply_theme() {
             *)
                 echo "[i] Ajuste de panel finalizado para $de."
                 ;;
-        es ac
+        esac
     fi
 
     echo -e "\n[✔] Tema Minecraft Neón aplicado con éxito."
     read -p "Presiona Enter para continuar..."
 }
 
-# Restaurar estado guardado
 restore_theme() {
     if [ ! -f "$BACKUP_FILE" ]; then
         echo -e "\n[!] No se encontró ningún respaldo guardado en $BACKUP_FILE."
@@ -186,7 +178,6 @@ restore_theme() {
     read -p "Presiona Enter para continuar..."
 }
 
-# Menú principal con fzf
 main_menu() {
     check_dependencies
 
