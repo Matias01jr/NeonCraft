@@ -20,7 +20,7 @@ WALLPAPER_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/r
 mkdir -p "$CONFIG_DIR"
 
 check_dependencies() {
-    # Corregir error de repositorio CD-ROM en entornos Live
+    # Desactivar repositorios CD-ROM en entornos Live
     sudo sed -i '/cdrom:/s/^/#/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
 
     local pkgs=()
@@ -57,7 +57,6 @@ backup_current_theme() {
             echo "WALLPAPER=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null)" >> "$BACKUP_FILE"
             echo "COLOR_SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)" >> "$BACKUP_FILE"
             echo "GTK_THEME=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null)" >> "$BACKUP_FILE"
-            echo "ACCENT_COLOR=$(gsettings get org.gnome.desktop.interface accent-color 2>/dev/null)" >> "$BACKUP_FILE"
             ;;
         cinnamon)
             echo "WALLPAPER=$(gsettings get org.cinnamon.desktop.background picture-uri 2>/dev/null)" >> "$BACKUP_FILE"
@@ -69,7 +68,7 @@ backup_current_theme() {
             ;;
         xfce)
             local prop
-            prop=$(xfconf-query -c xfce4-desktop -l | grep 'last-image' | head -n 1)
+            prop=$(xfconf-query -c xfce4-desktop -l | grep -E 'last-image|image-path' | head -n 1)
             echo "XFCE_PROP=$prop" >> "$BACKUP_FILE"
             echo "WALLPAPER=$(xfconf-query -c xfce4-desktop -p "$prop" 2>/dev/null)" >> "$BACKUP_FILE"
             echo "GTK_THEME=$(xfconf-query -c xsettings -p /Net/ThemeName 2>/dev/null)" >> "$BACKUP_FILE"
@@ -106,17 +105,11 @@ apply_theme() {
             gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_PATH"
             gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
             gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
-            gsettings set org.gnome.desktop.interface accent-color 'purple' 2>/dev/null || true
             ;;
         cinnamon)
             gsettings set org.cinnamon.desktop.background picture-uri "file://$WALLPAPER_PATH"
-            if gsettings get org.cinnamon.desktop.interface gtk-theme | grep -q Mint; then
-                gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark-Purple' 2>/dev/null || \
-                gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark-Aqua' 2>/dev/null || \
-                gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark'
-            else
-                gsettings set org.cinnamon.desktop.interface gtk-theme 'Adwaita-dark'
-            fi
+            gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark-Purple' 2>/dev/null || \
+            gsettings set org.cinnamon.desktop.interface gtk-theme 'Adwaita-dark'
             ;;
         mate)
             gsettings set org.mate.background picture-filename "$WALLPAPER_PATH"
@@ -124,9 +117,10 @@ apply_theme() {
             gsettings set org.mate.interface gtk-theme 'Yaru-dark'
             ;;
         xfce)
-            local prop
-            prop=$(xfconf-query -c xfce4-desktop -l | grep 'last-image' | head -n 1)
-            [ -n "$prop" ] && xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER_PATH"
+            # Recorrer todos los monitores/pantallas en XFCE
+            for prop in $(xfconf-query -c xfce4-desktop -l | grep -E 'last-image|image-path'); do
+                xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER_PATH" 2>/dev/null || true
+            done
             xfconf-query -c xsettings -p /Net/ThemeName -s "Mint-Y-Dark-Purple" 2>/dev/null || \
             xfconf-query -c xsettings -p /Net/ThemeName -s "Adwaita-dark"
             ;;
@@ -135,44 +129,32 @@ apply_theme() {
             ;;
     esac
 
-    # ==============================================================================
-    # NUEVO: FORZAR RECARGA INMEDIATA DEL ESCRITORIO
-    # ==============================================================================
-    echo "[+] Forzando recarga de la interfaz gráfica..."
+    # Recarga inmediata de la interfaz gráfica
+    echo "[+] Forzando recarga del escritorio..."
     case "$de" in
-        gnome)
-            # Reemplaza el shell de GNOME (seguro, no cierra ventanas)
-            busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s 'Meta.restart("Restarting...")' >/dev/null 2>&1 || true
+        xfce)
+            xfdesktop --reload 2>/dev/null || xfdesktop -r 2>/dev/null || true
             ;;
         cinnamon)
-            # Reemplaza el shell de Cinnamon (seguro)
             cinnamon --replace >/dev/null 2>&1 &
             ;;
-        *)
-            # XFCE, MATE y KDE suelen recargar inmediatamente con los comandos anteriores
+        gnome)
+            busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s 'Meta.restart("Restarting...")' >/dev/null 2>&1 || true
             ;;
     esac
-    sleep 1 # Pequeña pausa para permitir que el entorno se redibuje
-    # ==============================================================================
 
     echo
     read -p "¿Deseas reubicar la barra/menú al estilo moderno central/neón? (s/N): " resp
     if [[ "$resp" =~ ^[Ss]$ ]]; then
         case "$de" in
             gnome)
-                echo "[i] Ajustando posición en GNOME..."
                 gsettings set org.gnome.shell.extensions.dash-to-dock dock-position 'BOTTOM' 2>/dev/null || true
                 ;;
             cinnamon)
-                echo "[i] Centrando elementos en panel de Cinnamon..."
                 gsettings set org.cinnamon panel-zone-icon-sizes '[{"panelId":1,"left":24,"center":32,"right":24}]' 2>/dev/null || true
                 ;;
             xfce)
-                echo "[i] Ajustando panel en XFCE..."
                 xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids -s 1 2>/dev/null || true
-                ;;
-            *)
-                echo "[i] Ajuste de panel finalizado para $de."
                 ;;
         esac
     fi
@@ -181,4 +163,68 @@ apply_theme() {
     read -p "Presiona Enter para continuar..."
 }
 
-# ... (resto del script sin cambios) ...
+restore_theme() {
+    if [ ! -f "$BACKUP_FILE" ]; then
+        echo -e "\n[!] No se encontró ningún respaldo guardado en $BACKUP_FILE."
+        read -p "Presiona Enter para continuar..."
+        return
+    fi
+
+    echo "[+] Restaurando tema anterior..."
+    source "$BACKUP_FILE"
+
+    case "$DE" in
+        gnome)
+            [ -n "$WALLPAPER" ] && gsettings set org.gnome.desktop.background picture-uri "$WALLPAPER"
+            [ -n "$COLOR_SCHEME" ] && gsettings set org.gnome.desktop.interface color-scheme "$COLOR_SCHEME"
+            [ -n "$GTK_THEME" ] && gsettings set org.gnome.desktop.interface gtk-theme "$GTK_THEME"
+            ;;
+        cinnamon)
+            [ -n "$WALLPAPER" ] && gsettings set org.cinnamon.desktop.background picture-uri "$WALLPAPER"
+            [ -n "$GTK_THEME" ] && gsettings set org.cinnamon.desktop.interface gtk-theme "$GTK_THEME"
+            ;;
+        mate)
+            [ -n "$WALLPAPER" ] && gsettings set org.mate.background picture-filename "$WALLPAPER"
+            [ -n "$GTK_THEME" ] && gsettings set org.mate.interface gtk-theme "$GTK_THEME"
+            ;;
+        xfce)
+            if [ -n "$WALLPAPER" ]; then
+                for prop in $(xfconf-query -c xfce4-desktop -l | grep -E 'last-image|image-path'); do
+                    xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER" 2>/dev/null || true
+                done
+                xfdesktop --reload 2>/dev/null || true
+            fi
+            [ -n "$GTK_THEME" ] && xfconf-query -c xsettings -p /Net/ThemeName -s "$GTK_THEME"
+            ;;
+    esac
+
+    echo -e "\n[✔] Configuración anterior restaurada."
+    read -p "Presiona Enter para continuar..."
+}
+
+main_menu() {
+    check_dependencies
+
+    while true; do
+        clear
+        local options="1) Aplicar Tema Minecraft Neón\n2) Restaurar Tema Anterior\n0) Salir"
+        
+        local selection
+        selection=$(echo -e "$options" | fzf --height 40% --reverse --header="=== MINECRAFT NEON THEME MANAGER ===" --prompt="Selecciona una opción: ")
+
+        case "$selection" in
+            "1)"*|1)
+                apply_theme
+                ;;
+            "2)"*|2)
+                restore_theme
+                ;;
+            "0)"*|0|"")
+                echo "Saliendo..."
+                exit 0
+                ;;
+        esac
+    done
+}
+
+main_menu
