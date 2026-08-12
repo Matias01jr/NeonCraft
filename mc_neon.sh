@@ -20,6 +20,9 @@ WALLPAPER_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/r
 mkdir -p "$CONFIG_DIR"
 
 check_dependencies() {
+    # Corregir error de repositorio CD-ROM en entornos Live (Linux Mint / Ubuntu)
+    sudo sed -i '/cdrom:/s/^/#/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+
     local pkgs=()
     command -v fzf >/dev/null 2>&1 || pkgs+=(fzf)
     command -v curl >/dev/null 2>&1 || pkgs+=(curl)
@@ -54,6 +57,7 @@ backup_current_theme() {
             echo "WALLPAPER=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null)" >> "$BACKUP_FILE"
             echo "COLOR_SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)" >> "$BACKUP_FILE"
             echo "GTK_THEME=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null)" >> "$BACKUP_FILE"
+            echo "ACCENT_COLOR=$(gsettings get org.gnome.desktop.interface accent-color 2>/dev/null)" >> "$BACKUP_FILE"
             ;;
         cinnamon)
             echo "WALLPAPER=$(gsettings get org.cinnamon.desktop.background picture-uri 2>/dev/null)" >> "$BACKUP_FILE"
@@ -85,7 +89,7 @@ apply_theme() {
         backup_current_theme
     fi
 
-    echo "[+] Descargando fondo desde GitHub..."
+    echo "[+] Descargando fondo $IMAGE_NAME desde GitHub..."
     
     if curl -fsSL -o "$WALLPAPER_PATH" "$WALLPAPER_URL"; then
         echo "[✔] Imagen descargada correctamente."
@@ -95,26 +99,36 @@ apply_theme() {
         return
     fi
 
-    echo "[+] Aplicando estilo Neón en $de..."
+    echo "[+] Aplicando estilo Neón Colorido en $de..."
     case "$de" in
         gnome)
             gsettings set org.gnome.desktop.background picture-uri "file://$WALLPAPER_PATH"
             gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_PATH"
             gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
             gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
+            gsettings set org.gnome.desktop.interface accent-color 'purple' 2>/dev/null || true
             ;;
         cinnamon)
             gsettings set org.cinnamon.desktop.background picture-uri "file://$WALLPAPER_PATH"
-            gsettings set org.cinnamon.desktop.interface gtk-theme 'Adwaita-dark'
+            # Prioriza variantes de color estilo neón de Mint-Y si están disponibles
+            if gsettings get org.cinnamon.desktop.interface gtk-theme | grep -q Mint; then
+                gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark-Purple' 2>/dev/null || \
+                gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark-Aqua' 2>/dev/null || \
+                gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark'
+            else
+                gsettings set org.cinnamon.desktop.interface gtk-theme 'Adwaita-dark'
+            fi
             ;;
         mate)
             gsettings set org.mate.background picture-filename "$WALLPAPER_PATH"
+            gsettings set org.mate.interface gtk-theme 'Mint-Y-Dark-Purple' 2>/dev/null || \
             gsettings set org.mate.interface gtk-theme 'Yaru-dark'
             ;;
         xfce)
             local prop
             prop=$(xfconf-query -c xfce4-desktop -l | grep 'last-image' | head -n 1)
             [ -n "$prop" ] && xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER_PATH"
+            xfconf-query -c xsettings -p /Net/ThemeName -s "Mint-Y-Dark-Purple" 2>/dev/null || \
             xfconf-query -c xsettings -p /Net/ThemeName -s "Adwaita-dark"
             ;;
         kde)
@@ -129,6 +143,10 @@ apply_theme() {
             gnome)
                 echo "[i] Ajustando posición en GNOME..."
                 gsettings set org.gnome.shell.extensions.dash-to-dock dock-position 'BOTTOM' 2>/dev/null || true
+                ;;
+            cinnamon)
+                echo "[i] Centrando elementos en panel de Cinnamon..."
+                gsettings set org.cinnamon panel-zone-icon-sizes '[{"panelId":1,"left":24,"center":32,"right":24}]' 2>/dev/null || true
                 ;;
             xfce)
                 echo "[i] Ajustando panel en XFCE..."
@@ -159,6 +177,7 @@ restore_theme() {
             [ -n "$WALLPAPER" ] && gsettings set org.gnome.desktop.background picture-uri "$WALLPAPER"
             [ -n "$COLOR_SCHEME" ] && gsettings set org.gnome.desktop.interface color-scheme "$COLOR_SCHEME"
             [ -n "$GTK_THEME" ] && gsettings set org.gnome.desktop.interface gtk-theme "$GTK_THEME"
+            [ -n "$ACCENT_COLOR" ] && gsettings set org.gnome.desktop.interface accent-color "$ACCENT_COLOR" 2>/dev/null || true
             ;;
         cinnamon)
             [ -n "$WALLPAPER" ] && gsettings set org.cinnamon.desktop.background picture-uri "$WALLPAPER"
